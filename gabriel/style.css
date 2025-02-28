@@ -34,11 +34,20 @@ h2 {
     margin: 15px 0;
     transition: all 0.3s ease;
     background-color: #f0f7ff;
+    position: relative;
 }
 
 #drop-zone:hover, #drop-zone.active {
     background-color: #e1f0fe;
     border-color: #2980b9;
+}
+
+#drop-zone:after {
+    content: 'Click or drop a file';
+    position: absolute;
+    bottom: 10px;
+    font-size: 11px;
+    color: #7f8c8d;
 }
 
 .drop-text {
@@ -85,6 +94,13 @@ h2 {
     margin-bottom: 8px;
     background-color: #f8f9fa;
     font-size: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#extracted-invoice strong, #portal-invoice strong {
+    color: #2c3e50;
 }
 
 #comparison-result {
@@ -108,4 +124,15 @@ h2 {
 
 .hidden {
     display: none;
+}
+
+/* Add a subtle animation for notifications */
+@keyframes highlight {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+#comparison-result.match, #comparison-result.mismatch {
+    animation: highlight 0.5s ease-in-out;
 }

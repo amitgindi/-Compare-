@@ -154,81 +154,169 @@ document.addEventListener("DOMContentLoaded", function () {
     function compareWithPortalInvoice(extractedInvoice) {
         status.textContent = "Comparing invoice numbers...";
         
-        // Query for the active tab and get the invoice number from the page
+        // Send message to content script to get invoice number
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            chrome.scripting.executeScript({
-                target: { tabId: tabs[0].id },
-                function: () => {
-                    // Try different selectors that might contain the invoice number
-                    const selectors = [
-                        "input[name='invoice_number']",
-                        "input[id*='invoice']",
-                        "input[name*='invoice']",
-                        "input[placeholder*='invoice']",
-                        "input[aria-label*='invoice']"
-                    ];
-                    
-                    for (const selector of selectors) {
-                        const element = document.querySelector(selector);
-                        if (element && element.value) {
-                            return element.value.trim();
-                        }
-                    }
-                    
-                    // If no input field is found, try to find text that looks like an invoice number
-                    const invoiceRegex = /Invoice\s*#?\s*(\w+[-\w]*)/i;
-                    const bodyText = document.body.innerText;
-                    const match = bodyText.match(invoiceRegex);
-                    
-                    if (match && match[1]) {
-                        return match[1].trim();
-                    }
-                    
-                    return null;
-                }
-            }, (results) => {
-                if (chrome.runtime.lastError) {
-                    console.error(chrome.runtime.lastError);
-                    status.textContent = "Error accessing page content.";
-                    status.className = "error";
+            // First try using our content script which is already injected
+            chrome.tabs.sendMessage(tabs[0].id, { action: "getInvoiceNumber" }, (response) => {
+                if (chrome.runtime.lastError || !response || !response.invoiceNumber) {
+                    // If content script method fails, fallback to direct script injection
+                    fallbackToScriptInjection(tabs[0].id, extractedInvoice);
                     return;
                 }
                 
-                if (results && results[0] && results[0].result) {
-                    const portalInvoice = results[0].result;
-                    
-                    // Show the portal invoice number
-                    portalInvoiceElement.classList.remove("hidden");
-                    pageInvoiceElement.textContent = portalInvoice;
-                    
-                    // Compare the invoice numbers
-                    comparisonResultElement.classList.remove("hidden");
-                    
-                    if (extractedInvoice === portalInvoice) {
-                        // Match
-                        comparisonResultElement.textContent = "✅ The invoice numbers match!";
-                        comparisonResultElement.className = "match";
-                        status.textContent = "Verification complete.";
-                        status.className = "success";
-                    } else {
-                        // Mismatch
-                        comparisonResultElement.textContent = "❌ The invoice numbers do not match!";
-                        comparisonResultElement.className = "mismatch";
-                        status.textContent = "Verification complete.";
-                        status.className = "warning";
-                        
-                        // Send message to background script to show notification
-                        chrome.runtime.sendMessage({
-                            action: "compareInvoice",
-                            extractedInvoice: extractedInvoice
-                        });
-                    }
-                } else {
-                    // Could not find invoice number in the page
-                    status.textContent = "Could not find invoice number in the portal page.";
-                    status.className = "error";
-                }
+                const portalInvoice = response.invoiceNumber;
+                processComparisonResult(extractedInvoice, portalInvoice);
             });
         });
+    }
+    
+    function fallbackToScriptInjection(tabId, extractedInvoice) {
+        chrome.scripting.executeScript({
+            target: { tabId: tabId },
+            function: () => {
+                // This function contains the exact same logic as getInvoiceNumberFromPage() in content.js
+                
+                // First, try input fields that might contain the invoice number
+                const inputSelectors = [
+                    "input[name='invoice_number']",
+                    "input[id*='invoice']",
+                    "input[name*='invoice']",
+                    "input[placeholder*='invoice']",
+                    "input[aria-label*='invoice']",
+                    "input[id*='bill']",
+                    "input[name*='bill']",
+                    "input[id*='document']",
+                    "input[name*='document']",
+                    "input[id*='reference']",
+                    "input[name*='reference']"
+                ];
+                
+                for (const selector of inputSelectors) {
+                    const element = document.querySelector(selector);
+                    if (element && element.value) {
+                        return element.value.trim();
+                    }
+                }
+                
+                // Next, try span, div, p elements that might contain invoice text
+                const textSelectors = [
+                    "span[id*='invoice']", 
+                    "div[id*='invoice']", 
+                    "p[id*='invoice']",
+                    "label[for*='invoice']",
+                    "span[id*='bill']", 
+                    "div[id*='bill']", 
+                    "p[id*='bill']",
+                    "span[id*='document']", 
+                    "div[id*='document']", 
+                    "p[id*='document']",
+                    "span[id*='reference']", 
+                    "div[id*='reference']", 
+                    "p[id*='reference']"
+                ];
+                
+                for (const selector of textSelectors) {
+                    const element = document.querySelector(selector);
+                    if (element && element.textContent) {
+                        const text = element.textContent.trim();
+                        // Try to extract invoice number from this text
+                        const patterns = [
+                            /Invoice\s*#?\s*[:\-]?\s*(\w+[-\w]*)/i,
+                            /Invoice\s*Number\s*[:\-]?\s*(\w+[-\w]*)/i,
+                            /Invoice\s*No\.?\s*[:\-]?\s*(\w+[-\w]*)/i,
+                            /Invoice\s*ID\s*[:\-]?\s*(\w+[-\w]*)/i,
+                            /INV\s*#?\s*[:\-]?\s*(\w+[-\w]*)/i,
+                            /Bill\s*Number\s*[:\-]?\s*(\w+[-\w]*)/i,
+                            /Document\s*Number\s*[:\-]?\s*(\w+[-\w]*)/i,
+                            /Reference\s*Number\s*[:\-]?\s*(\w+[-\w]*)/i
+                        ];
+                        
+                        for (const pattern of patterns) {
+                            const match = text.match(pattern);
+                            if (match && match[1]) {
+                                return match[1].trim();
+                            }
+                        }
+                    }
+                }
+                
+                // If no matching elements found, try to find text patterns in the page content
+                const bodyText = document.body.innerText;
+                const patterns = [
+                    /Invoice\s*#?\s*[:\-]?\s*(\w+[-\w]*)/i,
+                    /Invoice\s*Number\s*[:\-]?\s*(\w+[-\w]*)/i,
+                    /Invoice\s*No\.?\s*[:\-]?\s*(\w+[-\w]*)/i,
+                    /Invoice\s*ID\s*[:\-]?\s*(\w+[-\w]*)/i,
+                    /INV\s*#?\s*[:\-]?\s*(\w+[-\w]*)/i,
+                    /Bill\s*Number\s*[:\-]?\s*(\w+[-\w]*)/i,
+                    /Document\s*Number\s*[:\-]?\s*(\w+[-\w]*)/i,
+                    /Reference\s*Number\s*[:\-]?\s*(\w+[-\w]*)/i,
+                    /INV[0-9]{5,}/i,
+                    /[A-Z]{2,3}-\d{4,}/
+                ];
+                
+                for (const pattern of patterns) {
+                    const match = bodyText.match(pattern);
+                    if (match && match[1]) {
+                        return match[1].trim();
+                    }
+                }
+                
+                // Try generic pattern if nothing specific was found
+                const genericPattern = /\b([A-Z]{2,3}-?\d{4,})\b|\b(INV-?[0-9A-Z]{5,})\b/;
+                const genericMatch = bodyText.match(genericPattern);
+                if (genericMatch && (genericMatch[1] || genericMatch[2])) {
+                    return (genericMatch[1] || genericMatch[2]).trim();
+                }
+                
+                return null;
+            }
+        }, (results) => {
+            if (chrome.runtime.lastError) {
+                console.error(chrome.runtime.lastError);
+                status.textContent = "Error accessing page content.";
+                status.className = "error";
+                return;
+            }
+            
+            const portalInvoice = results && results[0] && results[0].result ? results[0].result : null;
+            processComparisonResult(extractedInvoice, portalInvoice);
+        });
+    }
+    
+    function processComparisonResult(extractedInvoice, portalInvoice) {
+        if (portalInvoice) {
+            // Show the portal invoice number
+            portalInvoiceElement.classList.remove("hidden");
+            pageInvoiceElement.textContent = portalInvoice;
+            
+            // Compare the invoice numbers
+            comparisonResultElement.classList.remove("hidden");
+            
+            if (extractedInvoice === portalInvoice) {
+                // Match
+                comparisonResultElement.textContent = "✅ The invoice numbers match!";
+                comparisonResultElement.className = "match";
+                status.textContent = "Verification complete.";
+                status.className = "success";
+            } else {
+                // Mismatch
+                comparisonResultElement.textContent = "❌ The invoice numbers do not match!";
+                comparisonResultElement.className = "mismatch";
+                status.textContent = "Verification complete.";
+                status.className = "warning";
+                
+                // Send message to background script to show notification
+                chrome.runtime.sendMessage({
+                    action: "compareInvoice",
+                    extractedInvoice: extractedInvoice,
+                    portalInvoice: portalInvoice
+                });
+            }
+        } else {
+            // Could not find invoice number in the page
+            status.textContent = "Could not find invoice number in the portal page.";
+            status.className = "error";
+        }
     }
 });
