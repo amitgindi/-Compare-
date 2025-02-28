@@ -1,21 +1,40 @@
 {
-    "manifest_version": 3,
-    "name": "Invoice Validator for Coupa",
-    "version": "1.0",
-    "description": "Checks if the uploaded PDF invoice matches the entered invoice number in Coupa.",
-    "permissions": ["scripting", "activeTab", "storage"],
-    "host_permissions": ["https://*.coupa.com/*"],
-    "background": {
-      "service_worker": "background.js"
-    },
-    "action": {
-      "default_popup": "popup.html"
-    },
-    "content_scripts": [
-      {
-        "matches": ["https://*.coupa.com/*"],
-        "js": ["content.js"]
+  "manifest_version": 3,
+  "name": "Invoice Checker",
+  "version": "1.0",
+  "description": "Checks invoice number in PDF",
+  "permissions": ["storage", "scripting", "activeTab", "notifications"],
+  "host_permissions": ["https://*/*"],
+
+  "action": {
+      "default_popup": "popup.html",
+      "default_icon": {
+        "16": "icon16.png",
+        "48": "icon48.png",
+        "128": "icon128.png"
       }
-    ]
-  }
+  },
+
+  "background": {
+      "service_worker": "background.js",
+      "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://*/*"],
+      "js": ["content.js"]
+    }
+  ],
+
+  "web_accessible_resources": [
+      {
+          "resources": ["pdf.worker.js"],
+          "matches": ["<all_urls>"]
+      }
+  ],
   
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

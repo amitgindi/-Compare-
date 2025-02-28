@@ -7,10 +7,26 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h2>Drag & Drop Invoice PDF</h2>
-    <div id="drop-zone">Drop PDF here</div>
-    <p id="status"></p>
-    <script src="pdf.js"></script> <!-- PDF Library -->
+    <div class="container">
+        <h2>Invoice Number Checker</h2>
+        <div id="drop-zone">
+            <div class="drop-text">Drop PDF invoice here</div>
+            <div class="icon">📄</div>
+        </div>
+        <div id="result-container">
+            <div id="status"></div>
+            <div id="extracted-invoice" class="hidden">
+                <strong>PDF Invoice #:</strong> <span id="pdf-invoice"></span>
+            </div>
+            <div id="portal-invoice" class="hidden">
+                <strong>Portal Invoice #:</strong> <span id="page-invoice"></span>
+            </div>
+            <div id="comparison-result" class="hidden"></div>
+        </div>
+    </div>
+
+    <!-- Load PDF.js Library -->
+    <script src="pdf.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>
